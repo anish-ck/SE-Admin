@@ -1,0 +1,21 @@
+{
+    "name": "Certificate Verification Admin",
+    "short_name": "CertVerify",
+    "description": "Blockchain-secured certificate management system",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#f9fafb",
+    "theme_color": "#2563eb",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
