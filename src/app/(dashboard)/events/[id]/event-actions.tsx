@@ -16,6 +16,7 @@ import {
     AlertTriangle
 } from 'lucide-react'
 import type { EventStatus } from '@/lib/types'
+import { autoIssueCertificates } from './actions'
 
 interface EventActionsProps {
     eventId: string
@@ -97,7 +98,24 @@ export function EventActions({
         }
 
         setShowLockModal(false)
-        setSuccess('Attendance locked! You can now issue certificates.')
+        setSuccess('Attendance locked! Issuing certificates and storing on blockchain...')
+
+        // Automatically issue certificates and store on blockchain
+        try {
+            const result = await autoIssueCertificates(eventId)
+            if (result.error) {
+                setSuccess('Attendance locked!')
+                setError(`Certificate auto-issue failed: ${result.error}`)
+            } else if (result.blockchain?.error) {
+                setSuccess(`Attendance locked! ${result.issued} certificates issued. Blockchain: ${result.blockchain.error}`)
+            } else {
+                setSuccess(`Attendance locked! ${result.issued} certificates issued and stored on blockchain.`)
+            }
+        } catch (e: any) {
+            setSuccess('Attendance locked!')
+            setError(`Auto-issue error: ${e.message}`)
+        }
+
         setLoading(false)
         router.refresh()
     }
@@ -198,6 +216,13 @@ export function EventActions({
                         </div>
                     </div>
 
+                    <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                        <Award className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-blue-800">
+                            Certificates will be <strong>automatically issued</strong> and stored on the blockchain for all {attendanceCount} attendees.
+                        </div>
+                    </div>
+
                     <div className="text-center py-4">
                         <div className="text-4xl font-bold text-gray-900">{attendanceCount}</div>
                         <div className="text-gray-500">Total Attendees</div>
@@ -216,9 +241,12 @@ export function EventActions({
                             className="btn-danger flex-1"
                         >
                             {loading ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <>
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    Processing...
+                                </>
                             ) : (
-                                'Lock Attendance'
+                                'Lock & Issue Certificates'
                             )}
                         </button>
                     </div>

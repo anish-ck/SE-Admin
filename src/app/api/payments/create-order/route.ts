@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json()
-        const { eventId, studentId, customerPhone } = body
+        const { eventId, studentId, customerPhone, returnUrl: clientReturnUrl } = body
 
         if (!eventId || !studentId) {
             return NextResponse.json(
@@ -108,8 +108,14 @@ export async function POST(request: NextRequest) {
         // Generate unique IDs
         const orderId = generateOrderId(eventId, studentId)
         const linkId = generateLinkId()
-        const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/payments/callback?order_id=${orderId}`
-        const notifyUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/payments/webhook`
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+        // If the client (mobile app) sends a returnUrl like syncevents://payment-complete,
+        // use that so Cashfree redirects back into the app. Otherwise fall back to our web callback.
+        const returnUrl = clientReturnUrl
+            ? `${clientReturnUrl}?order_id=${orderId}&link_id=${linkId}&status={payment_status}`
+            : `${appUrl}/api/payments/callback?order_id=${orderId}&link_id=${linkId}`
+        const notifyUrl = `${appUrl}/api/payments/webhook`
 
         // Set expiry to 30 minutes from now
         const expiryTime = new Date(Date.now() + 30 * 60 * 1000).toISOString()

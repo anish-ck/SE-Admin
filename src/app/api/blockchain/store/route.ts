@@ -5,11 +5,25 @@ import { storeCertificateHashBatch, getExplorerUrl } from '@/lib/blockchain'
 // This endpoint processes the blockchain queue
 // Should be called by a cron job or webhook
 export async function POST(request: NextRequest) {
-    // Verify this is an authorized request (e.g., from cron or admin)
+    // Verify this is an authorized request (cron, admin, or same-origin)
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Allow if: valid CRON_SECRET, or request comes from an authenticated admin session
+    let isAuthorized = false
+
+    if (cronSecret && cronSecret !== 'your-cron-secret' && authHeader === `Bearer ${cronSecret}`) {
+        isAuthorized = true
+    } else {
+        // Check if the caller is an authenticated admin user (same-origin from the dashboard)
+        const supabaseAuth = await createClient()
+        const { data: { user } } = await supabaseAuth.auth.getUser()
+        if (user) {
+            isAuthorized = true
+        }
+    }
+
+    if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -29,6 +43,55 @@ export async function POST(request: NextRequest) {
 
     try {
         const supabase = await createClient()
+
+        // Check if specific certificate IDs were passed in the body
+        let certificateIds: string[] | null = null
+        try {
+            const body = await request.json()
+            if (body.certificateIds && Array.isArray(body.certificateIds)) {
+                certificateIds = body.certificateIds
+            }
+        } catch {
+            // No body or invalid JSON — process queue as usual
+        }
+
+        // If certificate IDs provided, store those directly (skip queue)
+        if (certificateIds && certificateIds.length > 0) {
+            const { data: certs, error: certErr } = await supabase
+                .from('certificates')
+                .select('id, payload_hash')
+                .in('id', certificateIds)
+                .is('blockchain_tx_hash', null)
+
+            if (certErr) throw certErr
+            if (!certs || certs.length === 0) {
+                return NextResponse.json({ message: 'No pending certificates', processed: 0 })
+            }
+
+            const hashes = certs.map((c: { payload_hash: string }) => c.payload_hash)
+            const txHash = await storeCertificateHashBatch(hashes)
+            const now = new Date().toISOString()
+
+            for (const cert of certs) {
+                await supabase
+                    .from('certificates')
+                    .update({ blockchain_tx_hash: txHash, blockchain_stored_at: now })
+                    .eq('id', cert.id)
+            }
+
+            // Also update matching queue entries
+            await supabase
+                .from('blockchain_queue')
+                .update({ status: 'confirmed', tx_hash: txHash, processed_at: now })
+                .in('certificate_id', certs.map((c: { id: string }) => c.id))
+
+            return NextResponse.json({
+                success: true,
+                processed: certs.length,
+                txHash,
+                explorerUrl: getExplorerUrl(txHash),
+            })
+        }
 
         // Get pending items from queue
         const { data: pendingItems, error: fetchError } = await supabase

@@ -88,21 +88,44 @@ export function IssueCertificatesClient({ event, attendance, userId, alreadyIssu
                 setProgress({ current: i + 1, total: attendance.length })
             }
 
-            // Bulk insert certificates
-            const { error: insertError } = await supabase
+            // Bulk insert certificates and get back inserted IDs
+            const { data: insertedCerts, error: insertError } = await supabase
                 .from('certificates')
                 .insert(certificates)
+                .select('id, payload_hash')
 
             if (insertError) {
                 throw insertError
             }
 
-            // Add to blockchain queue
-            const queueItems = certificates.map(cert => ({
-                certificate_id: cert.certificate_number, // Will be updated with actual ID
-                payload_hash: cert.payload_hash,
-                status: 'pending',
-            }))
+            // Add to blockchain queue with actual certificate IDs
+            if (insertedCerts && insertedCerts.length > 0) {
+                const queueItems = insertedCerts.map((cert: { id: string; payload_hash: string }) => ({
+                    certificate_id: cert.id,
+                    payload_hash: cert.payload_hash,
+                    status: 'pending',
+                }))
+
+                await supabase
+                    .from('blockchain_queue')
+                    .insert(queueItems)
+
+                // Trigger blockchain processing via server action
+                try {
+                    const certIds = insertedCerts.map((c: { id: string }) => c.id)
+                    const res = await fetch('/api/blockchain/store', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ certificateIds: certIds }),
+                    })
+                    if (!res.ok) {
+                        console.warn('Blockchain store returned:', res.status)
+                    }
+                } catch (e) {
+                    // Non-critical — can retry from certificate detail page
+                    console.warn('Auto blockchain store trigger failed:', e)
+                }
+            }
 
             // Update event status
             await supabase

@@ -16,6 +16,7 @@ import {
 import { formatDate, formatDateTime } from '@/lib/utils'
 import type { Certificate } from '@/lib/types'
 import { CopyButton } from './copy-button'
+import { StoreOnBlockchainButton } from './store-button'
 
 interface Props {
     params: Promise<{ id: string }>
@@ -82,13 +83,18 @@ export default async function CertificateDetailPage({ params }: Props) {
                         ) : (
                             <>
                                 <Clock className="h-6 w-6 text-yellow-600" />
-                                <div>
+                                <div className="flex-1">
                                     <div className="font-medium text-yellow-800">Pending Blockchain</div>
                                     <div className="text-sm text-yellow-600">Awaiting blockchain confirmation</div>
                                 </div>
                             </>
                         )}
                     </div>
+                    {!cert.blockchain_tx_hash && (
+                        <div className="mt-3">
+                            <StoreOnBlockchainButton certificateId={cert.id} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Certificate Info */}
