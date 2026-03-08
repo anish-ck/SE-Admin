@@ -85,6 +85,10 @@ The Supabase database includes:
 | Faculty | Authorize events, lock attendance, issue certificates |
 | Event Manager | Create events, manage attendance |
 
+## System Architecture
+
+See the architecture diagram in [`system_architecture.md`](system_architecture.md).
+
 ## Workflow
 
 1. **Create Event**: Event manager creates a new event
